@@ -20,9 +20,9 @@ const ALLOWED_ORIGIN = 'https://ijoeyburt.github.io';
 const NOTION_VERSION = '2022-06-28';
 const NOTION_API = 'https://api.notion.com/v1';
 
-const COURSES_DB_ID = 'c7d06355-cfc0-4d98-9e09-100f80777fb7';
-const ASSIGNMENTS_DB_ID = '39107015-723d-48f6-93f5-77f77ed192ef';
-const WORK_SHIFTS_DB_ID = 'f783028e-3527-406c-af0b-0f98380237e6';
+const COURSES_DB_ID = '221b822c-7b58-4f07-a806-1fade0555c97';
+const ASSIGNMENTS_DB_ID = '579e9b5e-ea4a-44c4-8a50-cfa3810617ee';
+const WORK_SHIFTS_DB_ID = '172cb91e-cc73-459d-abc9-78e7a9fa7c74';
 
 const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
