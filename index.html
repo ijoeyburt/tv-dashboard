@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+      :root {
+            --bg: #08090a;
+            --panel: #101214;
+            --panel-border: #1f2226;
+            --text: #f2f2f0;
+            --text-dim: #8b9096;
+            --amber: #f2a93b;
+            --due: #e8654e;
+            --upcoming: #4fa8d8;
+            --work: #7ed48c;
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body {
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Space Grotesk', sans-serif;
+            overflow: hidden;
+      }
+
+      .mono { font-family: 'JetBrains Mono', monospace; }
+
+      #app {
+            display: grid;
+            grid-template-columns: 1.3fr 1fr 1fr;
+            grid-template-rows: auto 1fr auto;
+            gap: 24px;
+            width: 100vw;
+            height: 100vh;
+            padding: 32px;
+      }
+
+      .panel {
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 24px;
+            overflow: hidden;
+      }
+
+      .label {
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            font-weight: 500;
+            margin-bottom: 12px;
+      }
+
+      /* ---- Header: clock + weather ---- */
+      #header {
+            grid-column: 1 / 4;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 8px 16px 8px;
+      }
+
+      #clock-block { display: flex; flex-direction: column; }
+
+      #clock {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 5.2rem;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: 0.02em;
+      }
+
+      #clock .ampm { font-size: 2.2rem; color: var(--text-dim); margin-left: 8px; }
+
+      #date {
+            font-size: 1.3rem;
+            color: var(--text-dim);
+            margin-top: 8px;
+      }
+
+      #weather {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 1.4rem;
+      }
+
+      #weather .temp {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 3.2rem;
+            font-weight: 700;
+      }
+
+      #weather .wx-icon { font-size: 3.4rem; }
+
+      #weather .wx-meta {
+            display: flex;
+            flex-direction: column;
+            color: var(--text-dim);
+            font-size: 1.1rem;
+      }
+
+      #weather.error, #today-strip.error, #due-col.error, #upcoming-col.error {
+            color: var(--text-dim);
+            font-style: italic;
+      }
+
+      /* ---- Today strip ---- */
+      #today-panel {
+            grid-column: 1 / 4;
+            display: flex;
+            flex-direction: column;
+      }
+
+      #today-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            overflow-y: auto;
+      }
+
+      .chip {
+            display: flex;
+            flex-direction: column;
+            padding: 12px 18px;
+            border-radius: 12px;
+            min-width: 180px;
+            background: rgba(255,255,255,0.03);
+            border-left: 5px solid var(--amber);
+      }
+
+      .chip.work { border-left-color: var(--work); }
+
+      .chip .chip-title { font-weight: 600; font-size: 1.15rem; }
+      .chip .chip-sub {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-dim);
+            font-size: 0.95rem;
+            margin-top: 4px;
+      }
+
+      .empty-msg { color: var(--text-dim); font-style: italic; padding: 8px 0; }
+
+      /* ---- Assignments columns ---- */
+      #due-col, #upcoming-col { display: flex; flex-direction: column; overflow: hidden; }
+      #due-col .label { color: var(--due); }
+      #upcoming-col .label { color: var(--upcoming); }
+
+      .assign-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+
+      .assign-item {
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.03);
+      }
+
+      .assign-item .a-title { font-weight: 600; font-size: 1.05rem; }
+      .assign-item .a-meta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-top: 3px;
+      }
+
+      #due-col .assign-item { border-left: 4px solid var(--due); }
+      #upcoming-col .assign-item { border-left: 4px solid var(--upcoming); }
+
+      /* ---- Spotify now playing ---- */
+      #now-playing {
+            grid-column: 1 / 4;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 18px 24px;
+      }
+
+      #np-art {
+            width: 72px;
+            height: 72px;
+            border-radius: 8px;
+            background: #1b1d20 center/cover no-repeat;
+            flex-shrink: 0;
+      }
+
+      #np-info { flex: 1; min-width: 0; }
+      #np-track { font-weight: 600; font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #np-artist { color: var(--text-dim); font-size: 1rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+      #np-progress-track {
+            width: 100%;
+            height: 5px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 4px;
+            margin-top: 10px;
+            overflow: hidden;
+      }
+
+      #np-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--work);
+            border-radius: 4px;
+      }
+
+      #np-login-btn {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+            font-size: 1rem;
+            padding: 10px 20px;
+            border-radius: 24px;
+            border: none;
+            background: var(--work);
+            color: #06120a;
+            cursor: pointer;
+      }
+
+      #np-idle { color: var(--text-dim); font-size: 1.05rem; }
+
+      .hidden { display: none !important; }
+
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 3px; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+
+        <div id="header" class="panel">
+              <div id="clock-block">
+                      <div id="clock" class="mono">--:--:-- <span class="ampm">--</span></div>
+                      <div id="date">Loading date...</div>
+              </div>
+              <div id="weather">
+                      <div class="wx-icon" id="wx-icon">--</div>
+                      <div class="temp mono" id="wx-temp">--&deg;</div>
+                      <div class="wx-meta">
+                                <span id="wx-desc">Loading weather...</span>
+                                <span id="wx-updated"></span>
+                      </div>
+              </div>
+        </div>
+
+        <div id="today-panel" class="panel">
+              <div class="label">Today</div>
+              <div id="today-strip"><span class="empty-msg">Loading today's schedule...</span></div>
+        </div>
+
+        <div id="due-col" class="panel">
+              <div class="label">Due Soon (48h)</div>
+              <div class="assign-list" id="due-list"><span class="empty-msg">Loading assignments...</span></div>
+        </div>
+
+        <div id="upcoming-col" class="panel">
+              <div class="label">Upcoming</div>
+              <div class="assign-list" id="upcoming-list"><span class="empty-msg">Loading assignments...</span></div>
+        </div>
+
+        <div id="now-playing" class="panel">
+              <div id="np-art"></div>
+              <div id="np-info">
+                      <div id="np-idle">Spotify not connected.</div>
+                      <div id="np-playing-block" class="hidden">
+                                <div id="np-track">--</div>
+                                <div id="np-artist">--</div>
+                                <div id="np-progress-track"><div id="np-progress-fill"></div></div>
+                      </div>
+              </div>
+              <button id="np-login-btn" class="hidden">Connect Spotify</button>
+        </div>
+
+    </div>
+
+    <script>
+      (function () {
+          'use strict';
+
+          // ============================================================
+          // CONFIG
+          // ============================================================
+          const CONFIG = {
+                SPOTIFY_CLIENT_ID: '20201eaddf6c44fe88fd51961df40ca2',
+                SPOTIFY_REDIRECT_URI: 'https://ijoeyburt.github.io/tv-dashboard/',
+                SPOTIFY_SCOPES: 'user-read-currently-playing user-read-playback-state',
+                NOTION_WORKER_URL: 'https://REPLACE_ME.workers.dev', // set after `wrangler deploy`
+                WEATHER_LAT: 39.6295,
+                WEATHER_LON: -79.9559,
+                WEATHER_REFRESH_MS: 15 * 60 * 1000,   // 15 min
+                TODAY_REFRESH_MS: 5 * 60 * 1000,      // 5 min
+                ASSIGNMENTS_REFRESH_MS: 5 * 60 * 1000, // 5 min
+                SPOTIFY_POLL_MS: 10 * 1000,           // 10 sec
+                DUE_SOON_HOURS: 48
+          };
+
+          // ============================================================
+          // CLOCK
+          // ============================================================
+          function tickClock() {
+                const now = new Date();
+                let h = now.getHours();
+                const m = String(now.getMinutes()).padStart(2, '0');
+                const s = String(now.getSeconds()).padStart(2, '0');
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                h = h % 12;
+                if (h === 0) h = 12;
+                document.getElementById('clock').innerHTML =
+                        `${h}:${m}:${s} <span class="ampm">${ampm}</span>`;
+                document.getElementById('date').textContent = now.toLocaleDateString(undefined, {
+                        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+                });
+          }
+          tickClock();
+          setInterval(tickClock, 1000);
+
+          // ============================================================
+          // WEATHER (Open-Meteo, no auth)
+          // ============================================================
+          const WEATHER_CODES = {
+                0: ['☀️', 'Clear sky'],
+                1: ['🌤️', 'Mainly clear'],
+                2: ['⛅', 'Partly cloudy'],
+                3: ['☁️', 'Overcast'],
+                45: ['🌫️', 'Fog'],
+                48: ['🌫️', 'Rime fog'],
+                51: ['🌦️', 'Light drizzle'],
+                53: ['🌦️', 'Drizzle'],
+                55: ['🌦️', 'Dense drizzle'],
+                61: ['🌧️', 'Light rain'],
+                63: ['🌧️', 'Rain'],
+                65: ['🌧️', 'Heavy rain'],
+                71: ['🌨️', 'Light snow'],
+                73: ['🌨️', 'Snow'],
+                75: ['🌨️', 'Heavy snow'],
+                80: ['🌦️', 'Rain showers'],
+                81: ['🌦️', 'Rain showers'],
+                82: ['⛈️', 'Violent showers'],
+                95: ['⛈️', 'Thunderstorm'],
+                96: ['⛈️', 'Thunderstorm w/ hail'],
+                99: ['⛈️', 'Thunderstorm w/ hail']
+          };
+
+          async function loadWeather() {
+                const el = document.getElementById('weather');
+                try {
+                        const url = `https://api.open-meteo.com/v1/forecast?latitude=${CONFIG.WEATHER_LAT}&longitude=${CONFIG.WEATHER_LON}&current=temperature_2m,weather_code&temperature_unit=fahrenheit&timezone=auto`;
+                        const res = await fetch(url);
+                        if (!res.ok) throw new Error('weather http ' + res.status);
+                        const data = await res.json();
+                        const temp = Math.round(data.current.temperature_2m);
+                        const code = data.current.weather_code;
+                        const [icon, desc] = WEATHER_CODES[code] || ['🌤️', 'Weather'];
+                        document.getElementById('wx-icon').textContent = icon;
+                        document.getElementById('wx-temp').innerHTML = `${temp}&deg;`;
+                        document.getElementById('wx-desc').textContent = desc;
+                        document.getElementById('wx-updated').textContent =
+                                  'Updated ' + new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                        el.classList.remove('error');
+                } catch (err) {
+                        console.error('Weather load failed', err);
+                        document.getElementById('wx-desc').textContent = 'Weather unavailable';
+                        document.getElementById('wx-updated').textContent = '';
+                        el.classList.add('error');
+                }
+          }
+          loadWeather();
+          setInterval(loadWeather, CONFIG.WEATHER_REFRESH_MS);
+
+          // ============================================================
+          // TODAY STRIP (Notion Worker /today)
+          // ============================================================
+          async function loadToday() {
+                const strip = document.getElementById('today-strip');
+                if (!CONFIG.NOTION_WORKER_URL || CONFIG.NOTION_WORKER_URL.includes('REPLACE_ME')) {
+                        strip.innerHTML = '<span class="empty-msg">Worker URL not configured yet.</span>';
+                        return;
+                }
+                try {
+                        const res = await fetch(CONFIG.NOTION_WORKER_URL.replace(/\/$/, '') + '/today');
+                        if (!res.ok) throw new Error('today http ' + res.status);
+                        const data = await res.json();
+                        const classes = data.classes || [];
+                        const work = data.work || [];
+                        if (classes.length === 0 && work.length === 0) {
+                                  strip.innerHTML = '<span class="empty-msg">Nothing scheduled today.</span>';
+                                  return;
+                        }
+                        let html = '';
+                        classes.forEach(c => {
+                                  html += `<div class="chip">
+                                            <div class="chip-title">${escapeHtml(c.name || c.courseName || 'Class')}</div>
+                                                      <div class="chip-sub">${escapeHtml(c.time || '')}${c.location ? ' &middot; ' + escapeHtml(c.location) : ''}</div>
+                                                              </div>`;
+                        });
+                        work.forEach(w => {
+                                  html += `<div class="chip work">
+                                            <div class="chip-title">${escapeHtml(w.name || w.shift || 'Shift')}</div>
+                                                      <div class="chip-sub">${escapeHtml(w.time || '')}${w.location ? ' &middot; ' + escapeHtml(w.location) : ''}</div>
+                                                              </div>`;
+                        });
+                        strip.innerHTML = html;
+                        strip.classList.remove('error');
+                } catch (err) {
+                        console.error('Today load failed', err);
+                        strip.innerHTML = '<span class="empty-msg">Unable to load today’s schedule.</span>';
+                        strip.classList.add('error');
+                }
+          }
+          loadToday();
+          setInterval(loadToday, CONFIG.TODAY_REFRESH_MS);
+
+          // ============================================================
+          // ASSIGNMENTS (Notion Worker /assignments)
+          // ============================================================
+          async function loadAssignments() {
+                const dueList = document.getElementById('due-list');
+                const upcomingList = document.getElementById('upcoming-list');
+                if (!CONFIG.NOTION_WORKER_URL || CONFIG.NOTION_WORKER_URL.includes('REPLACE_ME')) {
+                        const msg = '<span class="empty-msg">Worker URL not configured yet.</span>';
+                        dueList.innerHTML = msg;
+                        upcomingList.innerHTML = msg;
+                        return;
+                }
+                try {
+                        const res = await fetch(CONFIG.NOTION_WORKER_URL.replace(/\/$/, '') + '/assignments');
+                        if (!res.ok) throw new Error('assignments http ' + res.status);
+                        const data = await res.json();
+                        const items = data.items || [];
+                        const now = Date.now();
+                        const soonCutoff = now + CONFIG.DUE_SOON_HOURS * 60 * 60 * 1000;
+
+                        const due = [];
+                        const upcoming = [];
+                        items.forEach(item => {
+                                  if (!item.dueDate) { upcoming.push(item); return; }
+                                  const dueTime = new Date(item.dueDate).getTime();
+                                  if (isNaN(dueTime)) { upcoming.push(item); return; }
+                                  if (dueTime <= soonCutoff) due.push(item);
+                                  else upcoming.push(item);
+                        });
+
+                        dueList.innerHTML = due.length
+                          ? due.map(renderAssignment).join('')
+                                  : '<span class="empty-msg">Nothing due soon.</span>';
+                        upcomingList.innerHTML = upcoming.length
+                          ? upcoming.map(renderAssignment).join('')
+                                  : '<span class="empty-msg">Nothing upcoming.</span>';
+                } catch (err) {
+                        console.error('Assignments load failed', err);
+                        const msg = '<span class="empty-msg">Unable to load assignments.</span>';
+                        dueList.innerHTML = msg;
+                        upcomingList.innerHTML = msg;
+                }
+          }
+
+          function renderAssignment(item) {
+                const dueStr = item.dueDate
+                  ? new Date(item.dueDate).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                        : 'No due date';
+                const meta = [item.className, dueStr, item.priority].filter(Boolean).join(' · ');
+                return `<div class="assign-item">
+                      <div class="a-title">${escapeHtml(item.name || item.title || 'Assignment')}</div>
+                            <div class="a-meta">${escapeHtml(meta)}</div>
+                                </div>`;
+          }
+
+          loadAssignments();
+          setInterval(loadAssignments, CONFIG.ASSIGNMENTS_REFRESH_MS);
+
+          function escapeHtml(str) {
+                return String(str)
+                  .replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;');
+          }
+
+          // ============================================================
+          // SPOTIFY (PKCE OAuth, no client secret)
+          // ============================================================
+          const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
+          const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
+          const SPOTIFY_NP_URL = 'https://api.spotify.com/v1/me/player/currently-playing';
+
+          const LS_KEYS = {
+                verifier: 'sp_code_verifier',
+                accessToken: 'sp_access_token',
+                refreshToken: 'sp_refresh_token',
+                expiresAt: 'sp_expires_at'
+          };
+
+          function base64UrlEncode(bytes) {
+                let str = '';
+                bytes.forEach(b => str += String.fromCharCode(b));
+                return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+          }
+
+          function generateCodeVerifier() {
+                const arr = new Uint8Array(64);
+                crypto.getRandomValues(arr);
+                return base64UrlEncode(arr);
+          }
+
+          async function generateCodeChallenge(verifier) {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(verifier);
+                const digest = await crypto.subtle.digest('SHA-256', data);
+                return base64UrlEncode(new Uint8Array(digest));
+          }
+
+          async function startSpotifyLogin() {
+                const verifier = generateCodeVerifier();
+                localStorage.setItem(LS_KEYS.verifier, verifier);
+                const challenge = await generateCodeChallenge(verifier);
+                const params = new URLSearchParams({
+                        client_id: CONFIG.SPOTIFY_CLIENT_ID,
+                        response_type: 'code',
+                        redirect_uri: CONFIG.SPOTIFY_REDIRECT_URI,
+                        code_challenge_method: 'S256',
+                        code_challenge: challenge,
+                        scope: CONFIG.SPOTIFY_SCOPES
+                });
+                window.location.href = `${SPOTIFY_AUTH_URL}?${params.toString()}`;
+          }
+
+          async function exchangeCodeForToken(code) {
+                const verifier = localStorage.getItem(LS_KEYS.verifier);
+                if (!verifier) return;
+                const body = new URLSearchParams({
+                        client_id: CONFIG.SPOTIFY_CLIENT_ID,
+                        grant_type: 'authorization_code',
+                        code: code,
+                        redirect_uri: CONFIG.SPOTIFY_REDIRECT_URI,
+                        code_verifier: verifier
+                });
+                try {
+                        const res = await fetch(SPOTIFY_TOKEN_URL, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                  body: body.toString()
+                        });
+                        if (!res.ok) throw new Error('token exchange http ' + res.status);
+                        const data = await res.json();
+                        storeTokens(data);
+                } catch (err) {
+                        console.error('Spotify token exchange failed', err);
+                } finally {
+                        // clean the ?code= param from the URL
+                        window.history.replaceState({}, document.title, CONFIG.SPOTIFY_REDIRECT_URI);
+                }
+          }
+
+          function storeTokens(data) {
+                localStorage.setItem(LS_KEYS.accessToken, data.access_token);
+                if (data.refresh_token) localStorage.setItem(LS_KEYS.refreshToken, data.refresh_token);
+                const expiresAt = Date.now() + (data.expires_in - 30) * 1000;
+                localStorage.setItem(LS_KEYS.expiresAt, String(expiresAt));
+          }
+
+          async function refreshAccessToken() {
+                const refreshToken = localStorage.getItem(LS_KEYS.refreshToken);
+                if (!refreshToken) return false;
+                try {
+                        const body = new URLSearchParams({
+                                  client_id: CONFIG.SPOTIFY_CLIENT_ID,
+                                  grant_type: 'refresh_token',
+                                  refresh_token: refreshToken
+                        });
+                        const res = await fetch(SPOTIFY_TOKEN_URL, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                  body: body.toString()
+                        });
+                        if (!res.ok) throw new Error('token refresh http ' + res.status);
+                        const data = await res.json();
+                        storeTokens(data);
+                        return true;
+                } catch (err) {
+                        console.error('Spotify token refresh failed', err);
+                        clearTokens();
+                        return false;
+                }
+          }
+
+          function clearTokens() {
+                Object.values(LS_KEYS).forEach(k => localStorage.removeItem(k));
+          }
+
+          function isConnected() {
+                return !!localStorage.getItem(LS_KEYS.accessToken);
+          }
+
+          async function getValidAccessToken() {
+                const expiresAt = Number(localStorage.getItem(LS_KEYS.expiresAt) || 0);
+                if (Date.now() >= expiresAt) {
+                        const ok = await refreshAccessToken();
+                        if (!ok) return null;
+                }
+                return localStorage.getItem(LS_KEYS.accessToken);
+          }
+
+          function msToClock(ms) {
+                const totalSec = Math.floor(ms / 1000);
+                const m = Math.floor(totalSec / 60);
+                const s = String(totalSec % 60).padStart(2, '0');
+                return `${m}:${s}`;
+          }
+
+          async function pollNowPlaying() {
+                const idleEl = document.getElementById('np-idle');
+                const playingBlock = document.getElementById('np-playing-block');
+                const loginBtn = document.getElementById('np-login-btn');
+                const artEl = document.getElementById('np-art');
+
+                if (!isConnected()) {
+                        idleEl.textContent = 'Spotify not connected.';
+                        idleEl.classList.remove('hidden');
+                        playingBlock.classList.add('hidden');
+                        loginBtn.classList.remove('hidden');
+                        return;
+                }
+
+                loginBtn.classList.add('hidden');
+                const token = await getValidAccessToken();
+                if (!token) {
+                        idleEl.textContent = 'Spotify session expired — reconnect.';
+                        idleEl.classList.remove('hidden');
+                        playingBlock.classList.add('hidden');
+                        loginBtn.classList.remove('hidden');
+                        return;
+                }
+
+                try {
+                        const res = await fetch(SPOTIFY_NP_URL, {
+                                  headers: { Authorization: `Bearer ${token}` }
+                        });
+
+                        if (res.status === 204) {
+                                  idleEl.textContent = 'Nothing playing right now.';
+                                  idleEl.classList.remove('hidden');
+                                  playingBlock.classList.add('hidden');
+                                  return;
+                        }
+                        if (!res.ok) throw new Error('now playing http ' + res.status);
+
+                        const data = await res.json();
+                        if (!data || !data.item) {
+                                  idleEl.textContent = 'Nothing playing right now.';
+                                  idleEl.classList.remove('hidden');
+                                  playingBlock.classList.add('hidden');
+                                  return;
+                        }
+
+                        idleEl.classList.add('hidden');
+                        playingBlock.classList.remove('hidden');
+                        document.getElementById('np-track').textContent = data.item.name || 'Unknown track';
+                        document.getElementById('np-artist').textContent =
+                                  (data.item.artists || []).map(a => a.name).join(', ') || 'Unknown artist';
+
+                        const images = data.item.album && data.item.album.images;
+                        if (images && images.length) {
+                                  artEl.style.backgroundImage = `url(${images[images.length > 1 ? 1 : 0].url})`;
+                        }
+
+                        const progressPct = data.item.duration_ms
+                          ? Math.min(100, (data.progress_ms / data.item.duration_ms) * 100)
+                                  : 0;
+                        document.getElementById('np-progress-fill').style.width = progressPct + '%';
+                } catch (err) {
+                        console.error('Spotify now-playing poll failed', err);
+                        idleEl.textContent = 'Spotify unavailable right now.';
+                        idleEl.classList.remove('hidden');
+                        playingBlock.classList.add('hidden');
+                }
+          }
+
+          document.getElementById('np-login-btn').addEventListener('click', startSpotifyLogin);
+
+          // Handle OAuth redirect (?code=...)
+          (async function initSpotify() {
+                const params = new URLSearchParams(window.location.search);
+                const code = params.get('code');
+                if (code) {
+                        await exchangeCodeForToken(code);
+                }
+                pollNowPlaying();
+                setInterval(pollNowPlaying, CONFIG.SPOTIFY_POLL_MS);
+          })();
+
+      })();
+</script>
+  </body>
+</html>
+</
