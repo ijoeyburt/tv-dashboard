@@ -378,7 +378,7 @@
           // ============================================================
           async function loadToday() {
                 const strip = document.getElementById('today-strip');
-                if (!CONFIG.NOTION_WORKER_URL || CONFIG.NOTION_WORKER_URL.includes('small-frog-34dd.joeyburtonwv')) {
+                if (!CONFIG.NOTION_WORKER_URL || CONFIG.NOTION_WORKER_URL.includes('REPLACE_ME')) {
                         strip.innerHTML = '<span class="empty-msg">Worker URL not configured yet.</span>';
                         return;
                 }
@@ -422,7 +422,7 @@
           async function loadAssignments() {
                 const dueList = document.getElementById('due-list');
                 const upcomingList = document.getElementById('upcoming-list');
-                if (!CONFIG.NOTION_WORKER_URL || CONFIG.NOTION_WORKER_URL.includes('small-frog-34dd.joeyburtonwv')) {
+                if (!CONFIG.NOTION_WORKER_URL || CONFIG.NOTION_WORKER_URL.includes('REPLACE_ME')) {
                         const msg = '<span class="empty-msg">Worker URL not configured yet.</span>';
                         dueList.innerHTML = msg;
                         upcomingList.innerHTML = msg;
