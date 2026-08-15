@@ -1,0 +1,6 @@
+name = "tv-dashboard-notion"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# Secrets (set via `wrangler secret put NOTION_TOKEN`, never committed here):
+#   NOTION_TOKEN
