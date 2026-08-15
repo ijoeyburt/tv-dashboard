@@ -290,7 +290,7 @@
                 SPOTIFY_CLIENT_ID: '20201eaddf6c44fe88fd51961df40ca2',
                 SPOTIFY_REDIRECT_URI: 'https://ijoeyburt.github.io/tv-dashboard/',
                 SPOTIFY_SCOPES: 'user-read-currently-playing user-read-playback-state',
-                NOTION_WORKER_URL: 'https://REPLACE_ME.workers.dev', // set after `wrangler deploy`
+                NOTION_WORKER_URL: 'https://small-frog-34dd.joeyburtonwv.workers.dev', // set after `wrangler deploy`
                 WEATHER_LAT: 39.6295,
                 WEATHER_LON: -79.9559,
                 WEATHER_REFRESH_MS: 15 * 60 * 1000,   // 15 min
@@ -378,7 +378,7 @@
           // ============================================================
           async function loadToday() {
                 const strip = document.getElementById('today-strip');
-                if (!CONFIG.NOTION_WORKER_URL || CONFIG.NOTION_WORKER_URL.includes('REPLACE_ME')) {
+                if (!CONFIG.NOTION_WORKER_URL || CONFIG.NOTION_WORKER_URL.includes('small-frog-34dd.joeyburtonwv')) {
                         strip.innerHTML = '<span class="empty-msg">Worker URL not configured yet.</span>';
                         return;
                 }
@@ -422,7 +422,7 @@
           async function loadAssignments() {
                 const dueList = document.getElementById('due-list');
                 const upcomingList = document.getElementById('upcoming-list');
-                if (!CONFIG.NOTION_WORKER_URL || CONFIG.NOTION_WORKER_URL.includes('REPLACE_ME')) {
+                if (!CONFIG.NOTION_WORKER_URL || CONFIG.NOTION_WORKER_URL.includes('small-frog-34dd.joeyburtonwv')) {
                         const msg = '<span class="empty-msg">Worker URL not configured yet.</span>';
                         dueList.innerHTML = msg;
                         upcomingList.innerHTML = msg;
