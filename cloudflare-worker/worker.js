@@ -15,7 +15,8 @@
  * Required secrets (set with `wrangler secret put <NAME>`):
  *   NOTION_TOKEN      - Notion internal integration token
  *   ICLOUD_ALBUM_URL  - iCloud Shared Album public website link
- *                       (e.g. https://www.icloud.com/sharedalbum/#B0aG...)
+ *                       (either https://www.icloud.com/sharedalbum/#TOKEN or
+ *                       https://photos.icloud.com/shared/album/ID)
  *
  * CORS is locked to https://ijoeyburt.github.io
  */
@@ -155,17 +156,23 @@ async function handleAssignments(env) {
 
 
 // ---------------------------------------------------------------------
-// iCloud Shared Album (undocumented public "sharedstreams" endpoints)
+// iCloud Shared Album (undocumented public endpoints, two link formats)
 //
-// Flow: POST {streamCtag:null} to /webstream -> photo list with GUIDs and
-// per-size derivatives (checksums). POST the GUIDs to /webasseturls ->
-// map of checksum -> signed download URL. Signed URLs expire, so the
-// result is only cached briefly.
+// Legacy links (www.icloud.com/sharedalbum/#TOKEN) use "sharedstreams":
+//   POST /webstream -> photo GUIDs + derivative checksums,
+//   POST /webasseturls -> checksum -> signed download URL.
+// Newer links (photos.icloud.com/shared/album/ID) are CloudKit "Shared
+// Collections": records/resolve gives an anonymous token, partition and
+// zone; records/query returns CPLAsset/CPLMaster records whose master
+// fields already carry download URLs.
+// Signed URLs expire, so results are only cached briefly.
 // ---------------------------------------------------------------------
 
 let photoCache = { photos: null, fetchedAt: 0, album: null };
 const PHOTO_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+const CLOUDKIT_CONTAINER = 'com.apple.photos.cloud';
+const CLOUDKIT_RESOLVE_HOST = 'https://ckdatabasews.icloud.com';
+const MAX_DISPLAY_WIDTH = 2560;
 
 async function handlePhotos(env) {
     const album = env.ICLOUD_ALBUM_URL;
@@ -181,18 +188,129 @@ async function handlePhotos(env) {
   const token = parseAlbumToken(album);
     if (!token) throw new Error('Could not parse album token from ICLOUD_ALBUM_URL');
 
-  let host = partitionHost(token);
-    let stream = await icloudPost(host, token, 'webstream', { streamCtag: null });
+  const isCollection = /photos\.icloud\.com\/shared\/album/i.test(album);
+    const photos = isCollection ? await getCollectionPhotos(token) : await getLegacyPhotos(token);
 
-  // Apple answers with 330 + X-Apple-MMe-Host when the album lives on
-  // another partition. Retry once against that host.
-  if (stream.redirectHost) {
-        host = stream.redirectHost;
-        stream = await icloudPost(host, token, 'webstream', { streamCtag: null });
-  }
+  photoCache = { photos, fetchedAt: now, album };
+    return jsonResponse({ photos });
+}
+
+// ---- Newer links: CloudKit Shared Collections ----
+
+async function getCollectionPhotos(shareId) {
+    const key = encodeURIComponent(shareId);
+    const resolved = await cloudKitPost(
+          `${CLOUDKIT_RESOLVE_HOST}/database/1/${CLOUDKIT_CONTAINER}/production/public/records/resolve?remapEnums=true&getCurrentSyncToken=true&sharing_url_key=${key}`,
+          { shortGUIDs: [{ value: shareId }] }
+    );
+
+  const share = (resolved.results || [])[0];
+    if (!share) throw new Error('iCloud share lookup returned no result');
+    if (share.serverErrorCode) {
+          throw new Error(`iCloud could not open the album (${share.serverErrorCode}${share.reason ? ': ' + share.reason : ''})`);
+    }
+    if (share.requireAppleLogin) throw new Error('Album requires Apple sign-in; turn on public link sharing in Photos');
+
+  const access = share.anonymousPublicAccess || {};
+    const partition = access.databasePartition;
+    if (!share.zoneID || !access.token || !/^https:\/\/p\d{1,3}-ckdatabasews\.icloud\.com(:443)?\/?$/i.test(partition || '')) {
+          throw new Error('iCloud share lookup did not include public access details');
+    }
+
+  const queryUrl = `${partition.replace(/\/$/, '')}/database/1/${CLOUDKIT_CONTAINER}/production/shared/records/query`
+        + `?remapEnums=true&getCurrentSyncToken=true&sharing_url_key=${key}&publicAccessAuthToken=${encodeURIComponent(access.token)}`;
+
+  const assets = [];
+    const masters = {};
+    let continuation;
+    for (let page = 0; page < 50; page++) {
+          const body = {
+                  query: {
+                            recordType: 'CPLAssetAndMasterByAssetDateWithoutHiddenOrDeleted',
+                            filterBy: [{ fieldName: 'direction', comparator: 'EQUALS', fieldValue: { value: 'ASCENDING', type: 'STRING' } }]
+                  },
+                  zoneID: share.zoneID,
+                  resultsLimit: 200
+          };
+          if (continuation) body.continuationMarker = continuation;
+          const res = await cloudKitPost(queryUrl, body);
+          for (const rec of res.records || []) {
+                  if (rec.recordType === 'CPLAsset') assets.push(rec);
+                  else if (rec.recordType === 'CPLMaster' && rec.recordName) masters[rec.recordName] = rec;
+          }
+          continuation = res.continuationMarker;
+          if (!continuation) break;
+    }
+
+  const photos = [];
+    for (const asset of assets) {
+          const f = asset.fields || {};
+          const masterName = f.masterRef && f.masterRef.value && f.masterRef.value.recordName;
+          const master = masterName && masters[masterName];
+          if (!master) continue;
+          const best = pickCollectionRendition(master.fields || {});
+          if (!best) continue;
+          const ms = f.assetDate && f.assetDate.value;
+          photos.push({
+                  url: best.url,
+                  width: best.width,
+                  height: best.height,
+                  date: ms ? new Date(Number(ms)).toISOString() : null
+          });
+    }
+    return photos;
+}
+
+// Image renditions are res{Name}Res fields with res{Name}Width/Height.
+// Video renditions are skipped. JPEG renditions are preferred because the
+// original may be HEIC, which most TV browsers can't display.
+function pickCollectionRendition(fields) {
+    const options = [];
+    for (const [name, field] of Object.entries(fields)) {
+          const m = /^res([A-Za-z]+)Res$/.exec(name);
+          if (!m || name.includes('Vid') || !field || !field.value) continue;
+          const r = m[1];
+          const url = field.value.downloadURL && field.value.downloadURL.replace('${f}', 'photo');
+          const width = Number(fields[`res${r}Width`] && fields[`res${r}Width`].value) || 0;
+          const height = Number(fields[`res${r}Height`] && fields[`res${r}Height`].value) || 0;
+          const fileType = String((fields[`res${r}FileType`] && fields[`res${r}FileType`].value) || '');
+          if (!url || !width || !height || !/^https:\/\/[^/]*\.(icloud-content|icloud)\.com\//i.test(url)) continue;
+          const isJpeg = /jpe?g/i.test(r) || /jpeg/i.test(fileType);
+          const isHeic = /heic|heif/i.test(fileType) || (r === 'Original' && !isJpeg);
+          options.push({ url, width, height, isJpeg, isHeic });
+    }
+    if (!options.length) return null;
+    const usable = options.filter(o => !o.isHeic);
+    const pool = usable.length ? usable : options;
+    const fitting = pool.filter(o => o.width <= MAX_DISPLAY_WIDTH);
+    const candidates = fitting.length ? fitting : pool;
+    candidates.sort((a, b) => (b.isJpeg - a.isJpeg) || (fitting.length ? b.width - a.width : a.width - b.width));
+    return candidates[0];
+}
+
+async function cloudKitPost(url, body) {
+    const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain', Origin: 'https://www.icloud.com' },
+          body: JSON.stringify(body)
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`iCloud CloudKit request failed (${res.status}): ${text.slice(0, 200)}`);
+    try { return JSON.parse(text); } catch (_) { throw new Error('iCloud CloudKit response was not JSON'); }
+}
+
+// ---- Legacy links: sharedstreams ----
+
+async function getLegacyPhotos(token) {
+    // Any partition answers 330 + X-Apple-MMe-Host pointing at the real one.
+  let host = 'p01-sharedstreams.icloud.com';
+    let stream = await icloudPost(host, token, 'webstream', { streamCtag: null });
+    if (stream.redirectHost) {
+          host = stream.redirectHost;
+          stream = await icloudPost(host, token, 'webstream', { streamCtag: null });
+    }
     const photosRaw = (stream.data.photos || []).filter(p => p.mediaAssetType !== 'video');
 
-  // Pick the largest derivative per photo.
   const picked = photosRaw.map(p => {
         let best = null;
         for (const d of Object.values(p.derivatives || {})) {
@@ -208,11 +326,9 @@ async function handlePhotos(env) {
         } : null;
   }).filter(Boolean);
 
-  // Resolve download URLs in chunks.
   const urlMap = {};
-    const CHUNK = 25;
-    for (let i = 0; i < picked.length; i += CHUNK) {
-          const guids = picked.slice(i, i + CHUNK).map(p => p.guid);
+    for (let i = 0; i < picked.length; i += 25) {
+          const guids = picked.slice(i, i + 25).map(p => p.guid);
           const res = await icloudPost(host, token, 'webasseturls', { photoGuids: guids });
           const items = (res.data && res.data.items) || {};
           for (const [checksum, loc] of Object.entries(items)) {
@@ -222,12 +338,9 @@ async function handlePhotos(env) {
           }
     }
 
-  const photos = picked
+  return picked
         .filter(p => urlMap[p.checksum])
         .map(p => ({ url: urlMap[p.checksum], width: p.width, height: p.height, date: p.date }));
-
-  photoCache = { photos, fetchedAt: now, album };
-    return jsonResponse({ photos });
 }
 
 function parseAlbumToken(input) {
@@ -236,20 +349,6 @@ function parseAlbumToken(input) {
     if (!s.includes('/')) return s; // raw token
   const parts = s.replace(/[?#].*$/, '').split('/').filter(Boolean);
     return parts.pop() || null;
-}
-
-function partitionHost(token) {
-    // Token prefix encodes the server partition in base62:
-    // 'A' + 1 char, otherwise 2 chars after the first.
-  const digits = token[0] === 'A' ? token.slice(1, 2) : token.slice(1, 3);
-    let n = 0;
-    for (const ch of digits) {
-          const v = BASE62.indexOf(ch);
-          if (v < 0) { n = 23; break; }
-          n = n * 62 + v;
-    }
-    if (!n) n = 23;
-    return `p${String(n).padStart(2, '0')}-sharedstreams.icloud.com`;
 }
 
 async function icloudPost(host, token, endpoint, body) {
