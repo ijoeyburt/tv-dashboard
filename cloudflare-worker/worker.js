@@ -273,8 +273,8 @@ async function getCollectionPhotos(shareId) {
 }
 
 // Image renditions are res{Name}Res fields with res{Name}Width/Height.
-// Video renditions are skipped. JPEG renditions are preferred because the
-// original may be HEIC, which most TV browsers can't display.
+// Video renditions are skipped, and so is HEIC (the original is often HEIC,
+// which most TV browsers can't display). PNG originals (screenshots) are fine.
 function pickCollectionRendition(fields) {
     const options = [];
     for (const [name, field] of Object.entries(fields)) {
@@ -287,15 +287,17 @@ function pickCollectionRendition(fields) {
           const fileType = String((fields[`res${r}FileType`] && fields[`res${r}FileType`].value) || '');
           if (!url || !width || !height || !/^https:\/\/[^/]*\.(icloud-content|icloud)\.com\//i.test(url)) continue;
           const isJpeg = /jpe?g/i.test(r) || /jpeg/i.test(fileType);
-          const isHeic = /heic|heif/i.test(fileType) || (r === 'Original' && !isJpeg);
-          options.push({ url, width, height, isJpeg, isHeic });
+          // Browsers can show JPEG/PNG/GIF/WebP; HEIC (or unknown type) can't be relied on.
+          const browserSafe = isJpeg || /png|gif|webp/i.test(fileType);
+          options.push({ url, width, height, isJpeg: isJpeg ? 1 : 0, browserSafe });
     }
     if (!options.length) return null;
-    const usable = options.filter(o => !o.isHeic);
+    const usable = options.filter(o => o.browserSafe);
     const pool = usable.length ? usable : options;
     const fitting = pool.filter(o => o.width <= MAX_DISPLAY_WIDTH);
     const candidates = fitting.length ? fitting : pool;
-    candidates.sort((a, b) => (b.isJpeg - a.isJpeg) || (fitting.length ? b.width - a.width : a.width - b.width));
+    // Biggest that fits the TV (or smallest oversized one); JPEG breaks ties.
+    candidates.sort((a, b) => (fitting.length ? b.width - a.width : a.width - b.width) || (b.isJpeg - a.isJpeg));
     return candidates[0];
 }
 
