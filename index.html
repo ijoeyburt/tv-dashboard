@@ -33,10 +33,12 @@
 
       .mono { font-family: 'JetBrains Mono', monospace; }
 
+      /* Vertical (portrait) layout:
+         header / today / photos full width, then Due Soon + Upcoming side by side. */
       #app {
             display: grid;
-            grid-template-columns: 1.3fr 1fr 1fr;
-            grid-template-rows: auto auto 1fr auto;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto 38vh minmax(0, 1fr);
             gap: 24px;
             width: 100vw;
             height: 100vh;
@@ -62,7 +64,7 @@
 
       /* ---- Header: clock + weather ---- */
       #header {
-            grid-column: 1 / 4;
+            grid-column: 1 / -1;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -109,14 +111,14 @@
             font-size: 1.1rem;
       }
 
-      #weather.error, #today-strip.error, #due-col.error, #upcoming-col.error {
+      #weather.error, #today-strip.error {
             color: var(--text-dim);
             font-style: italic;
       }
 
       /* ---- Today strip ---- */
       #today-panel {
-            grid-column: 1 / 4;
+            grid-column: 1 / -1;
             display: flex;
             flex-direction: column;
       }
@@ -150,6 +152,58 @@
 
       .empty-msg { color: var(--text-dim); font-style: italic; padding: 8px 0; }
 
+      /* ---- Photo slideshow ---- */
+      #photos-panel {
+            grid-column: 1 / -1;
+            position: relative;
+            padding: 0;
+            background: #000;
+      }
+
+      .slide {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            transition: opacity 1.6s ease;
+      }
+
+      .slide.show { opacity: 1; }
+
+      .slide .bg {
+            position: absolute;
+            inset: -40px;
+            background: center/cover no-repeat;
+            filter: blur(32px) brightness(0.45);
+      }
+
+      .slide img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+      }
+
+      #photo-date {
+            position: absolute;
+            right: 18px;
+            bottom: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: rgba(255,255,255,0.75);
+            text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+            z-index: 2;
+      }
+
+      #photo-msg {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3;
+      }
+
       /* ---- Assignments columns ---- */
       #due-col, #upcoming-col { display: flex; flex-direction: column; overflow: hidden; }
       #due-col .label { color: var(--due); }
@@ -158,12 +212,12 @@
       .assign-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
 
       .assign-item {
-            padding: 10px 14px;
+            padding: 12px 16px;
             border-radius: 10px;
             background: rgba(255,255,255,0.03);
       }
 
-      .assign-item .a-title { font-weight: 600; font-size: 1.05rem; }
+      .assign-item .a-title { font-weight: 600; font-size: 1.1rem; }
       .assign-item .a-meta {
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.85rem;
@@ -173,57 +227,6 @@
 
       #due-col .assign-item { border-left: 4px solid var(--due); }
       #upcoming-col .assign-item { border-left: 4px solid var(--upcoming); }
-
-      /* ---- Spotify now playing ---- */
-      #now-playing {
-            grid-column: 1 / 4;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            padding: 18px 24px;
-      }
-
-      #np-art {
-            width: 72px;
-            height: 72px;
-            border-radius: 8px;
-            background: #1b1d20 center/cover no-repeat;
-            flex-shrink: 0;
-      }
-
-      #np-info { flex: 1; min-width: 0; }
-      #np-track { font-weight: 600; font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      #np-artist { color: var(--text-dim); font-size: 1rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-      #np-progress-track {
-            width: 100%;
-            height: 5px;
-            background: rgba(255,255,255,0.08);
-            border-radius: 4px;
-            margin-top: 10px;
-            overflow: hidden;
-      }
-
-      #np-progress-fill {
-            height: 100%;
-            width: 0%;
-            background: var(--work);
-            border-radius: 4px;
-      }
-
-      #np-login-btn {
-            font-family: 'Space Grotesk', sans-serif;
-            font-weight: 600;
-            font-size: 1rem;
-            padding: 10px 20px;
-            border-radius: 24px;
-            border: none;
-            background: var(--work);
-            color: #06120a;
-            cursor: pointer;
-      }
-
-      #np-idle { color: var(--text-dim); font-size: 1.05rem; }
 
       .hidden { display: none !important; }
 
@@ -254,6 +257,13 @@
               <div id="today-strip"><span class="empty-msg">Loading today's schedule...</span></div>
         </div>
 
+        <div id="photos-panel" class="panel">
+              <div class="slide" id="slide-a"><div class="bg"></div><img alt=""></div>
+              <div class="slide" id="slide-b"><div class="bg"></div><img alt=""></div>
+              <div id="photo-date"></div>
+              <div id="photo-msg"><span class="empty-msg">Loading photos...</span></div>
+        </div>
+
         <div id="due-col" class="panel">
               <div class="label">Due Soon (48h)</div>
               <div class="assign-list" id="due-list"><span class="empty-msg">Loading assignments...</span></div>
@@ -262,19 +272,6 @@
         <div id="upcoming-col" class="panel">
               <div class="label">Upcoming</div>
               <div class="assign-list" id="upcoming-list"><span class="empty-msg">Loading assignments...</span></div>
-        </div>
-
-        <div id="now-playing" class="panel">
-              <div id="np-art"></div>
-              <div id="np-info">
-                      <div id="np-idle">Spotify not connected.</div>
-                      <div id="np-playing-block" class="hidden">
-                                <div id="np-track">--</div>
-                                <div id="np-artist">--</div>
-                                <div id="np-progress-track"><div id="np-progress-fill"></div></div>
-                      </div>
-              </div>
-              <button id="np-login-btn" class="hidden">Connect Spotify</button>
         </div>
 
     </div>
@@ -287,18 +284,21 @@
           // CONFIG
           // ============================================================
           const CONFIG = {
-                SPOTIFY_CLIENT_ID: '20201eaddf6c44fe88fd51961df40ca2',
-                SPOTIFY_REDIRECT_URI: 'https://ijoeyburt.github.io/tv-dashboard/',
-                SPOTIFY_SCOPES: 'user-read-currently-playing user-read-playback-state',
-                NOTION_WORKER_URL: 'https://small-frog-34dd.joeyburtonwv.workers.dev', // set after `wrangler deploy`
+                NOTION_WORKER_URL: 'https://small-frog-34dd.joeyburtonwv.workers.dev',
                 WEATHER_LAT: 39.6295,
                 WEATHER_LON: -79.9559,
-                WEATHER_REFRESH_MS: 15 * 60 * 1000,   // 15 min
-                TODAY_REFRESH_MS: 5 * 60 * 1000,      // 5 min
+                WEATHER_REFRESH_MS: 15 * 60 * 1000,    // 15 min
+                TODAY_REFRESH_MS: 5 * 60 * 1000,       // 5 min
                 ASSIGNMENTS_REFRESH_MS: 5 * 60 * 1000, // 5 min
-                SPOTIFY_POLL_MS: 10 * 1000,           // 10 sec
+                ASSIGNMENTS_RERENDER_MS: 60 * 1000,    // re-sort locally every minute so past-due items drop off
+                PHOTOS_REFRESH_MS: 20 * 60 * 1000,     // 20 min (iCloud URLs expire)
+                PHOTO_INTERVAL_MS: 15 * 1000,          // 15 sec per photo
                 DUE_SOON_HOURS: 48
           };
+
+          const workerUrl = (path) => CONFIG.NOTION_WORKER_URL.replace(/\/$/, '') + path;
+          const workerConfigured = () =>
+                !!CONFIG.NOTION_WORKER_URL && !CONFIG.NOTION_WORKER_URL.includes('REPLACE_ME');
 
           // ============================================================
           // CLOCK
@@ -374,16 +374,16 @@
           setInterval(loadWeather, CONFIG.WEATHER_REFRESH_MS);
 
           // ============================================================
-          // TODAY STRIP (Notion Worker /today)
+          // TODAY STRIP (Worker /today)
           // ============================================================
           async function loadToday() {
                 const strip = document.getElementById('today-strip');
-                if (!CONFIG.NOTION_WORKER_URL || CONFIG.NOTION_WORKER_URL.includes('REPLACE_ME')) {
+                if (!workerConfigured()) {
                         strip.innerHTML = '<span class="empty-msg">Worker URL not configured yet.</span>';
                         return;
                 }
                 try {
-                        const res = await fetch(CONFIG.NOTION_WORKER_URL.replace(/\/$/, '') + '/today');
+                        const res = await fetch(workerUrl('/today'));
                         if (!res.ok) throw new Error('today http ' + res.status);
                         const data = await res.json();
                         const classes = data.classes || [];
@@ -395,15 +395,15 @@
                         let html = '';
                         classes.forEach(c => {
                                   html += `<div class="chip">
-                                            <div class="chip-title">${escapeHtml(c.name || c.courseName || 'Class')}</div>
-                                                      <div class="chip-sub">${escapeHtml(c.time || '')}${c.location ? ' &middot; ' + escapeHtml(c.location) : ''}</div>
-                                                              </div>`;
+                                      <div class="chip-title">${escapeHtml(c.name || c.courseName || 'Class')}</div>
+                                      <div class="chip-sub">${escapeHtml(c.time || '')}${c.location ? ' &middot; ' + escapeHtml(c.location) : ''}</div>
+                                  </div>`;
                         });
                         work.forEach(w => {
                                   html += `<div class="chip work">
-                                            <div class="chip-title">${escapeHtml(w.name || w.shift || 'Shift')}</div>
-                                                      <div class="chip-sub">${escapeHtml(w.time || '')}${w.location ? ' &middot; ' + escapeHtml(w.location) : ''}</div>
-                                                              </div>`;
+                                      <div class="chip-title">${escapeHtml(w.name || w.shift || 'Shift')}</div>
+                                      <div class="chip-sub">${escapeHtml(w.time || '')}${w.location ? ' &middot; ' + escapeHtml(w.location) : ''}</div>
+                                  </div>`;
                         });
                         strip.innerHTML = html;
                         strip.classList.remove('error');
@@ -417,62 +417,179 @@
           setInterval(loadToday, CONFIG.TODAY_REFRESH_MS);
 
           // ============================================================
-          // ASSIGNMENTS (Notion Worker /assignments)
+          // ASSIGNMENTS (Worker /assignments)
           // ============================================================
+          let assignmentItems = null;
+
+          // Notion date-only values ("2026-10-22") would parse as UTC midnight,
+          // which shows as 8 PM the previous day in Eastern time. Treat them as
+          // due at the end of that local day instead.
+          function parseDue(str) {
+                if (!str) return null;
+                const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str);
+                if (m) {
+                        const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59);
+                        return { time: d.getTime(), date: d, dateOnly: true };
+                }
+                const d = new Date(str);
+                if (isNaN(d.getTime())) return null;
+                return { time: d.getTime(), date: d, dateOnly: false };
+          }
+
           async function loadAssignments() {
                 const dueList = document.getElementById('due-list');
                 const upcomingList = document.getElementById('upcoming-list');
-                if (!CONFIG.NOTION_WORKER_URL || CONFIG.NOTION_WORKER_URL.includes('REPLACE_ME')) {
+                if (!workerConfigured()) {
                         const msg = '<span class="empty-msg">Worker URL not configured yet.</span>';
                         dueList.innerHTML = msg;
                         upcomingList.innerHTML = msg;
                         return;
                 }
                 try {
-                        const res = await fetch(CONFIG.NOTION_WORKER_URL.replace(/\/$/, '') + '/assignments');
+                        const res = await fetch(workerUrl('/assignments'));
                         if (!res.ok) throw new Error('assignments http ' + res.status);
                         const data = await res.json();
-                        const items = data.items || [];
-                        const now = Date.now();
-                        const soonCutoff = now + CONFIG.DUE_SOON_HOURS * 60 * 60 * 1000;
-
-                        const due = [];
-                        const upcoming = [];
-                        items.forEach(item => {
-                                  if (!item.dueDate) { upcoming.push(item); return; }
-                                  const dueTime = new Date(item.dueDate).getTime();
-                                  if (isNaN(dueTime)) { upcoming.push(item); return; }
-                                  if (dueTime <= soonCutoff) due.push(item);
-                                  else upcoming.push(item);
-                        });
-
-                        dueList.innerHTML = due.length
-                          ? due.map(renderAssignment).join('')
-                                  : '<span class="empty-msg">Nothing due soon.</span>';
-                        upcomingList.innerHTML = upcoming.length
-                          ? upcoming.map(renderAssignment).join('')
-                                  : '<span class="empty-msg">Nothing upcoming.</span>';
+                        assignmentItems = data.items || [];
+                        renderAssignments();
                 } catch (err) {
                         console.error('Assignments load failed', err);
+                        if (assignmentItems) { renderAssignments(); return; } // keep last good data
                         const msg = '<span class="empty-msg">Unable to load assignments.</span>';
                         dueList.innerHTML = msg;
                         upcomingList.innerHTML = msg;
                 }
           }
 
-          function renderAssignment(item) {
-                const dueStr = item.dueDate
-                  ? new Date(item.dueDate).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-                        : 'No due date';
+          function renderAssignments() {
+                if (!assignmentItems) return;
+                const now = Date.now();
+                const soonCutoff = now + CONFIG.DUE_SOON_HOURS * 60 * 60 * 1000;
+                const due = [];
+                const upcoming = [];
+
+                assignmentItems.forEach(item => {
+                        const parsed = parseDue(item.dueDate);
+                        if (!parsed) { upcoming.push({ item, parsed: null }); return; }
+                        if (parsed.time < now) return; // past due: hidden
+                        if (parsed.time <= soonCutoff) due.push({ item, parsed });
+                        else upcoming.push({ item, parsed });
+                });
+
+                const byTime = (a, b) => (a.parsed ? a.parsed.time : Infinity) - (b.parsed ? b.parsed.time : Infinity);
+                due.sort(byTime);
+                upcoming.sort(byTime);
+
+                document.getElementById('due-list').innerHTML = due.length
+                        ? due.map(renderAssignment).join('')
+                        : '<span class="empty-msg">Nothing due soon.</span>';
+                document.getElementById('upcoming-list').innerHTML = upcoming.length
+                        ? upcoming.map(renderAssignment).join('')
+                        : '<span class="empty-msg">Nothing upcoming.</span>';
+          }
+
+          function renderAssignment({ item, parsed }) {
+                let dueStr = 'No due date';
+                if (parsed) {
+                        const opts = parsed.dateOnly
+                                ? { weekday: 'short', month: 'short', day: 'numeric' }
+                                : { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+                        dueStr = parsed.date.toLocaleString(undefined, opts);
+                }
                 const meta = [item.className, dueStr, item.priority].filter(Boolean).join(' · ');
                 return `<div class="assign-item">
-                      <div class="a-title">${escapeHtml(item.name || item.title || 'Assignment')}</div>
-                            <div class="a-meta">${escapeHtml(meta)}</div>
-                                </div>`;
+                    <div class="a-title">${escapeHtml(item.name || item.title || 'Assignment')}</div>
+                    <div class="a-meta">${escapeHtml(meta)}</div>
+                </div>`;
           }
 
           loadAssignments();
           setInterval(loadAssignments, CONFIG.ASSIGNMENTS_REFRESH_MS);
+          setInterval(renderAssignments, CONFIG.ASSIGNMENTS_RERENDER_MS);
+
+          // ============================================================
+          // PHOTO SLIDESHOW (Worker /photos -> iCloud Shared Album)
+          // ============================================================
+          const slides = [document.getElementById('slide-a'), document.getElementById('slide-b')];
+          const photoMsg = document.getElementById('photo-msg');
+          const photoDate = document.getElementById('photo-date');
+          let photos = [];
+          let deck = [];
+          let activeSlide = 0;
+          let failStreak = 0;
+          let slideTimer = null;
+
+          function shuffle(arr) {
+                const a = arr.slice();
+                for (let i = a.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [a[i], a[j]] = [a[j], a[i]];
+                }
+                return a;
+          }
+
+          function showPhotoMsg(text) {
+                photoMsg.innerHTML = `<span class="empty-msg">${escapeHtml(text)}</span>`;
+                photoMsg.classList.remove('hidden');
+          }
+
+          async function loadPhotos() {
+                if (!workerConfigured()) { showPhotoMsg('Worker URL not configured yet.'); return; }
+                try {
+                        const res = await fetch(workerUrl('/photos'));
+                        if (!res.ok) throw new Error('photos http ' + res.status);
+                        const data = await res.json();
+                        const list = data.photos || [];
+                        if (!list.length) {
+                                  if (!photos.length) showPhotoMsg(data.error ? 'Photo album not set up yet.' : 'No photos in the album yet.');
+                                  return;
+                        }
+                        const firstLoad = photos.length === 0;
+                        photos = list;
+                        deck = shuffle(photos); // fresh, unexpired URLs
+                        failStreak = 0;
+                        if (firstLoad) nextPhoto();
+                } catch (err) {
+                        console.error('Photos load failed', err);
+                        if (!photos.length) showPhotoMsg('Unable to load photos.');
+                }
+          }
+
+          function nextPhoto() {
+                clearTimeout(slideTimer);
+                if (!photos.length) return;
+                if (!deck.length) deck = shuffle(photos);
+                const photo = deck.shift();
+
+                const img = new Image();
+                img.onload = () => {
+                        failStreak = 0;
+                        const next = slides[1 - activeSlide];
+                        next.querySelector('.bg').style.backgroundImage = `url("${photo.url}")`;
+                        next.querySelector('img').src = photo.url;
+                        next.classList.add('show');
+                        slides[activeSlide].classList.remove('show');
+                        activeSlide = 1 - activeSlide;
+                        photoMsg.classList.add('hidden');
+                        photoDate.textContent = photo.date
+                                ? new Date(photo.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                                : '';
+                        slideTimer = setTimeout(nextPhoto, CONFIG.PHOTO_INTERVAL_MS);
+                };
+                img.onerror = () => {
+                        failStreak++;
+                        if (failStreak >= 3) {
+                                  // URLs probably expired; grab a fresh list, then continue.
+                                  failStreak = 0;
+                                  loadPhotos().then(() => { slideTimer = setTimeout(nextPhoto, 2000); });
+                        } else {
+                                  slideTimer = setTimeout(nextPhoto, 500);
+                        }
+                };
+                img.src = photo.url;
+          }
+
+          loadPhotos();
+          setInterval(loadPhotos, CONFIG.PHOTOS_REFRESH_MS);
 
           function escapeHtml(str) {
                 return String(str)
@@ -482,220 +599,7 @@
                   .replace(/"/g, '&quot;');
           }
 
-          // ============================================================
-          // SPOTIFY (PKCE OAuth, no client secret)
-          // ============================================================
-          const SPOTIFY_AUTH_URL = 'https://accounts.spotify.com/authorize';
-          const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
-          const SPOTIFY_NP_URL = 'https://api.spotify.com/v1/me/player/currently-playing';
-
-          const LS_KEYS = {
-                verifier: 'sp_code_verifier',
-                accessToken: 'sp_access_token',
-                refreshToken: 'sp_refresh_token',
-                expiresAt: 'sp_expires_at'
-          };
-
-          function base64UrlEncode(bytes) {
-                let str = '';
-                bytes.forEach(b => str += String.fromCharCode(b));
-                return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-          }
-
-          function generateCodeVerifier() {
-                const arr = new Uint8Array(64);
-                crypto.getRandomValues(arr);
-                return base64UrlEncode(arr);
-          }
-
-          async function generateCodeChallenge(verifier) {
-                const encoder = new TextEncoder();
-                const data = encoder.encode(verifier);
-                const digest = await crypto.subtle.digest('SHA-256', data);
-                return base64UrlEncode(new Uint8Array(digest));
-          }
-
-          async function startSpotifyLogin() {
-                const verifier = generateCodeVerifier();
-                localStorage.setItem(LS_KEYS.verifier, verifier);
-                const challenge = await generateCodeChallenge(verifier);
-                const params = new URLSearchParams({
-                        client_id: CONFIG.SPOTIFY_CLIENT_ID,
-                        response_type: 'code',
-                        redirect_uri: CONFIG.SPOTIFY_REDIRECT_URI,
-                        code_challenge_method: 'S256',
-                        code_challenge: challenge,
-                        scope: CONFIG.SPOTIFY_SCOPES
-                });
-                window.location.href = `${SPOTIFY_AUTH_URL}?${params.toString()}`;
-          }
-
-          async function exchangeCodeForToken(code) {
-                const verifier = localStorage.getItem(LS_KEYS.verifier);
-                if (!verifier) return;
-                const body = new URLSearchParams({
-                        client_id: CONFIG.SPOTIFY_CLIENT_ID,
-                        grant_type: 'authorization_code',
-                        code: code,
-                        redirect_uri: CONFIG.SPOTIFY_REDIRECT_URI,
-                        code_verifier: verifier
-                });
-                try {
-                        const res = await fetch(SPOTIFY_TOKEN_URL, {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                                  body: body.toString()
-                        });
-                        if (!res.ok) throw new Error('token exchange http ' + res.status);
-                        const data = await res.json();
-                        storeTokens(data);
-                } catch (err) {
-                        console.error('Spotify token exchange failed', err);
-                } finally {
-                        // clean the ?code= param from the URL
-                        window.history.replaceState({}, document.title, CONFIG.SPOTIFY_REDIRECT_URI);
-                }
-          }
-
-          function storeTokens(data) {
-                localStorage.setItem(LS_KEYS.accessToken, data.access_token);
-                if (data.refresh_token) localStorage.setItem(LS_KEYS.refreshToken, data.refresh_token);
-                const expiresAt = Date.now() + (data.expires_in - 30) * 1000;
-                localStorage.setItem(LS_KEYS.expiresAt, String(expiresAt));
-          }
-
-          async function refreshAccessToken() {
-                const refreshToken = localStorage.getItem(LS_KEYS.refreshToken);
-                if (!refreshToken) return false;
-                try {
-                        const body = new URLSearchParams({
-                                  client_id: CONFIG.SPOTIFY_CLIENT_ID,
-                                  grant_type: 'refresh_token',
-                                  refresh_token: refreshToken
-                        });
-                        const res = await fetch(SPOTIFY_TOKEN_URL, {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                                  body: body.toString()
-                        });
-                        if (!res.ok) throw new Error('token refresh http ' + res.status);
-                        const data = await res.json();
-                        storeTokens(data);
-                        return true;
-                } catch (err) {
-                        console.error('Spotify token refresh failed', err);
-                        clearTokens();
-                        return false;
-                }
-          }
-
-          function clearTokens() {
-                Object.values(LS_KEYS).forEach(k => localStorage.removeItem(k));
-          }
-
-          function isConnected() {
-                return !!localStorage.getItem(LS_KEYS.accessToken);
-          }
-
-          async function getValidAccessToken() {
-                const expiresAt = Number(localStorage.getItem(LS_KEYS.expiresAt) || 0);
-                if (Date.now() >= expiresAt) {
-                        const ok = await refreshAccessToken();
-                        if (!ok) return null;
-                }
-                return localStorage.getItem(LS_KEYS.accessToken);
-          }
-
-          function msToClock(ms) {
-                const totalSec = Math.floor(ms / 1000);
-                const m = Math.floor(totalSec / 60);
-                const s = String(totalSec % 60).padStart(2, '0');
-                return `${m}:${s}`;
-          }
-
-          async function pollNowPlaying() {
-                const idleEl = document.getElementById('np-idle');
-                const playingBlock = document.getElementById('np-playing-block');
-                const loginBtn = document.getElementById('np-login-btn');
-                const artEl = document.getElementById('np-art');
-
-                if (!isConnected()) {
-                        idleEl.textContent = 'Spotify not connected.';
-                        idleEl.classList.remove('hidden');
-                        playingBlock.classList.add('hidden');
-                        loginBtn.classList.remove('hidden');
-                        return;
-                }
-
-                loginBtn.classList.add('hidden');
-                const token = await getValidAccessToken();
-                if (!token) {
-                        idleEl.textContent = 'Spotify session expired — reconnect.';
-                        idleEl.classList.remove('hidden');
-                        playingBlock.classList.add('hidden');
-                        loginBtn.classList.remove('hidden');
-                        return;
-                }
-
-                try {
-                        const res = await fetch(SPOTIFY_NP_URL, {
-                                  headers: { Authorization: `Bearer ${token}` }
-                        });
-
-                        if (res.status === 204) {
-                                  idleEl.textContent = 'Nothing playing right now.';
-                                  idleEl.classList.remove('hidden');
-                                  playingBlock.classList.add('hidden');
-                                  return;
-                        }
-                        if (!res.ok) throw new Error('now playing http ' + res.status);
-
-                        const data = await res.json();
-                        if (!data || !data.item) {
-                                  idleEl.textContent = 'Nothing playing right now.';
-                                  idleEl.classList.remove('hidden');
-                                  playingBlock.classList.add('hidden');
-                                  return;
-                        }
-
-                        idleEl.classList.add('hidden');
-                        playingBlock.classList.remove('hidden');
-                        document.getElementById('np-track').textContent = data.item.name || 'Unknown track';
-                        document.getElementById('np-artist').textContent =
-                                  (data.item.artists || []).map(a => a.name).join(', ') || 'Unknown artist';
-
-                        const images = data.item.album && data.item.album.images;
-                        if (images && images.length) {
-                                  artEl.style.backgroundImage = `url(${images[images.length > 1 ? 1 : 0].url})`;
-                        }
-
-                        const progressPct = data.item.duration_ms
-                          ? Math.min(100, (data.progress_ms / data.item.duration_ms) * 100)
-                                  : 0;
-                        document.getElementById('np-progress-fill').style.width = progressPct + '%';
-                } catch (err) {
-                        console.error('Spotify now-playing poll failed', err);
-                        idleEl.textContent = 'Spotify unavailable right now.';
-                        idleEl.classList.remove('hidden');
-                        playingBlock.classList.add('hidden');
-                }
-          }
-
-          document.getElementById('np-login-btn').addEventListener('click', startSpotifyLogin);
-
-          // Handle OAuth redirect (?code=...)
-          (async function initSpotify() {
-                const params = new URLSearchParams(window.location.search);
-                const code = params.get('code');
-                if (code) {
-                        await exchangeCodeForToken(code);
-                }
-                pollNowPlaying();
-                setInterval(pollNowPlaying, CONFIG.SPOTIFY_POLL_MS);
-          })();
-
       })();
-</script>
+    </script>
   </body>
 </html>
-</

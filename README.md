@@ -1,11 +1,11 @@
 # TV Dashboard
 
-A single-file dashboard for a spare TV/monitor: clock, Morgantown WV weather, today's classes + work shifts, due/upcoming assignments, and Spotify now-playing. Static site on GitHub Pages, backed by a small Cloudflare Worker that proxies Notion.
+A single-file dashboard for a spare TV/monitor: clock, Morgantown WV weather, today's classes + work shifts, due/upcoming assignments (past-due hidden), and a photo slideshow from an iCloud Shared Album. Laid out for a vertical (portrait) TV. Static site on GitHub Pages, backed by a small Cloudflare Worker that proxies Notion.
 
 ## Structure
 
 - `index.html` — the whole dashboard (vanilla JS/CSS, no build step).
-- `cloudflare-worker/worker.js` — Notion proxy: `GET /today`, `GET /assignments`.
+- `cloudflare-worker/worker.js` — Notion + iCloud proxy: `GET /today`, `GET /assignments`, `GET /photos`.
 - `cloudflare-worker/wrangler.toml` — Worker config (`tv-dashboard-notion`).
 - `.github/workflows/deploy.yml` — deploys `index.html` to GitHub Pages on every push to `main`.
 
@@ -35,15 +35,14 @@ Edit `index.html`, find `CONFIG.NOTION_WORKER_URL` near the top of the `<script>
 
 Repo → **Settings → Pages → Source → GitHub Actions**. The included workflow (`.github/workflows/deploy.yml`) handles the rest on every push to `main`.
 
-### 5. Spotify
+### 5. Photo slideshow (iCloud Shared Album)
 
-The dashboard uses Spotify's PKCE OAuth flow (no client secret, tokens live in the browser's `localStorage`). In the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), open the app with Client ID `20201eaddf6c44fe88fd51961df40ca2` → **Edit Settings** → **Redirect URIs** → add:
+1. iPhone Photos -> Albums -> + -> **New Shared Album** (e.g. "TV").
+2. Open the album -> People icon -> turn on **Public Website** -> copy the link.
+3. Give the link to the Worker: `wrangler secret put ICLOUD_ALBUM_URL` (or Cloudflare dashboard -> Worker -> Settings -> Variables and Secrets -> add secret `ICLOUD_ALBUM_URL`).
+4. To add photos: Share -> Add to Shared Album -> TV. The dashboard picks them up within ~20 minutes.
 
-```
-https://ijoeyburt.github.io/tv-dashboard/
-```
-
-Save. On first load, click **Connect Spotify** on the dashboard and authorize.
+Uses Apple's undocumented public shared-album endpoints; images are Apple's reduced-size copies (~2048px). Videos are skipped.
 
 ## Notion database schema expected by the Worker
 

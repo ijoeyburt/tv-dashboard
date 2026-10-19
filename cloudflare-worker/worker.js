@@ -9,9 +9,13 @@
  * Routes:
  *   GET /today       -> { classes: [...], work: [...] }   (today only)
  *   GET /assignments -> { items: [...] }                   (Status != Done)
+ *   GET /photos      -> { photos: [{ url, width, height, date }] }
+ *                       (iCloud Shared Album, public website link)
  *
- * Required secret (set with `wrangler secret put NOTION_TOKEN`):
- *   NOTION_TOKEN  - Notion internal integration token
+ * Required secrets (set with `wrangler secret put <NAME>`):
+ *   NOTION_TOKEN      - Notion internal integration token
+ *   ICLOUD_ALBUM_URL  - iCloud Shared Album public website link
+ *                       (e.g. https://www.icloud.com/sharedalbum/#B0aG...)
  *
  * CORS is locked to https://ijoeyburt.github.io
  */
@@ -47,6 +51,9 @@ export default {
               }
               if (url.pathname === '/assignments' && request.method === 'GET') {
                         return withCors(await handleAssignments(env));
+              }
+              if (url.pathname === '/photos' && request.method === 'GET') {
+                        return withCors(await handlePhotos(env));
               }
               return withCors(jsonResponse({ error: 'Not found' }, 404));
       } catch (err) {
@@ -144,6 +151,126 @@ async function handleAssignments(env) {
   });
 
   return jsonResponse({ items });
+}
+
+
+// ---------------------------------------------------------------------
+// iCloud Shared Album (undocumented public "sharedstreams" endpoints)
+//
+// Flow: POST {streamCtag:null} to /webstream -> photo list with GUIDs and
+// per-size derivatives (checksums). POST the GUIDs to /webasseturls ->
+// map of checksum -> signed download URL. Signed URLs expire, so the
+// result is only cached briefly.
+// ---------------------------------------------------------------------
+
+let photoCache = { photos: null, fetchedAt: 0, album: null };
+const PHOTO_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
+async function handlePhotos(env) {
+    const album = env.ICLOUD_ALBUM_URL;
+    if (!album) {
+          return jsonResponse({ photos: [], error: 'ICLOUD_ALBUM_URL secret is not set on this Worker' });
+    }
+
+  const now = Date.now();
+    if (photoCache.photos && photoCache.album === album && (now - photoCache.fetchedAt) < PHOTO_CACHE_TTL_MS) {
+          return jsonResponse({ photos: photoCache.photos, cached: true });
+    }
+
+  const token = parseAlbumToken(album);
+    if (!token) throw new Error('Could not parse album token from ICLOUD_ALBUM_URL');
+
+  let host = partitionHost(token);
+    let stream = await icloudPost(host, token, 'webstream', { streamCtag: null });
+
+  // Apple answers with 330 + X-Apple-MMe-Host when the album lives on
+  // another partition. Retry once against that host.
+  if (stream.redirectHost) {
+        host = stream.redirectHost;
+        stream = await icloudPost(host, token, 'webstream', { streamCtag: null });
+  }
+    const photosRaw = (stream.data.photos || []).filter(p => p.mediaAssetType !== 'video');
+
+  // Pick the largest derivative per photo.
+  const picked = photosRaw.map(p => {
+        let best = null;
+        for (const d of Object.values(p.derivatives || {})) {
+                if (!d || !d.checksum) continue;
+                if (!best || Number(d.fileSize || 0) > Number(best.fileSize || 0)) best = d;
+        }
+        return best ? {
+                guid: p.photoGuid,
+                checksum: best.checksum,
+                width: Number(best.width) || null,
+                height: Number(best.height) || null,
+                date: p.dateCreated || null
+        } : null;
+  }).filter(Boolean);
+
+  // Resolve download URLs in chunks.
+  const urlMap = {};
+    const CHUNK = 25;
+    for (let i = 0; i < picked.length; i += CHUNK) {
+          const guids = picked.slice(i, i + CHUNK).map(p => p.guid);
+          const res = await icloudPost(host, token, 'webasseturls', { photoGuids: guids });
+          const items = (res.data && res.data.items) || {};
+          for (const [checksum, loc] of Object.entries(items)) {
+                  if (loc && loc.url_location && loc.url_path) {
+                            urlMap[checksum] = `https://${loc.url_location}${loc.url_path}`;
+                  }
+          }
+    }
+
+  const photos = picked
+        .filter(p => urlMap[p.checksum])
+        .map(p => ({ url: urlMap[p.checksum], width: p.width, height: p.height, date: p.date }));
+
+  photoCache = { photos, fetchedAt: now, album };
+    return jsonResponse({ photos });
+}
+
+function parseAlbumToken(input) {
+    const s = String(input).trim();
+    if (s.includes('#')) return s.split('#').pop().split(/[/?;]/)[0] || null;
+    if (!s.includes('/')) return s; // raw token
+  const parts = s.replace(/[?#].*$/, '').split('/').filter(Boolean);
+    return parts.pop() || null;
+}
+
+function partitionHost(token) {
+    // Token prefix encodes the server partition in base62:
+    // 'A' + 1 char, otherwise 2 chars after the first.
+  const digits = token[0] === 'A' ? token.slice(1, 2) : token.slice(1, 3);
+    let n = 0;
+    for (const ch of digits) {
+          const v = BASE62.indexOf(ch);
+          if (v < 0) { n = 23; break; }
+          n = n * 62 + v;
+    }
+    if (!n) n = 23;
+    return `p${String(n).padStart(2, '0')}-sharedstreams.icloud.com`;
+}
+
+async function icloudPost(host, token, endpoint, body) {
+    const res = await fetch(`https://${host}/${token}/sharedstreams/${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain', Origin: 'https://www.icloud.com' },
+          body: JSON.stringify(body),
+          redirect: 'manual'
+    });
+    const text = await res.text();
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; } catch (_) { /* non-JSON */ }
+
+  if (res.status === 330) {
+        const redirectHost = data['X-Apple-MMe-Host'];
+        if (redirectHost) return { data, redirectHost };
+  }
+    if (!res.ok) {
+          throw new Error(`iCloud ${endpoint} failed (${res.status}): ${text.slice(0, 200)}`);
+    }
+    return { data, redirectHost: null };
 }
 
 
