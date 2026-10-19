@@ -188,8 +188,19 @@ async function handlePhotos(env) {
   const token = parseAlbumToken(album);
     if (!token) throw new Error('Could not parse album token from ICLOUD_ALBUM_URL');
 
-  const isCollection = /photos\.icloud\.com\/shared\/album/i.test(album);
-    const photos = isCollection ? await getCollectionPhotos(token) : await getLegacyPhotos(token);
+  // Legacy links carry the token after '#'; newer links put the id in the path.
+  const isCollection = !String(album).includes('#');
+    let photos;
+    try {
+          photos = isCollection ? await getCollectionPhotos(token) : await getLegacyPhotos(token);
+    } catch (err) {
+          return jsonResponse({
+                  photos: [],
+                  error: String(err && err.message || err),
+                  format: isCollection ? 'collection' : 'legacy',
+                  tokenLength: token.length
+          }, 502);
+    }
 
   photoCache = { photos, fetchedAt: now, album };
     return jsonResponse({ photos });
